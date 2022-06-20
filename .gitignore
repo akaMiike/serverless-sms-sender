@@ -67,3 +67,4 @@ nb-configuration.xml
 ##############################
 .vscode/
 .code-workspace
+/node_modules/

@@ -26,7 +26,7 @@ provider:
           Resource: "*"
 
 custom:
-  fileUploadBucketName: ${self:service}-bucket-${self:provider.stage}
+  fileUploadBucketName: ${self:service}-bucketteste-${self:provider.stage}
 
 package:
   artifact: target/ServerlessSmsSender-1.0-SNAPSHOT.jar
@@ -48,7 +48,9 @@ functions:
       - httpApi:
           method: GET
           path: /images
-
+    environment:
+      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
+      CLIENT_REGION: ${self:provider.region}
 resources:
   Resources:
     FileBucket:
