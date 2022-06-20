@@ -4,25 +4,55 @@ provider:
   name: aws
   runtime: java11
   region: sa-east-1
+  stage: dev
+  apiGateway:
+    binaryMediaTypes:
+      - 'multipart/form-data'
+
   environment:
     TWILIO_ACCOUNT_SID: YOUR-TWILIO-ACCOUNT-SID-HERE
     TWILIO_AUTH_TOKEN: YOUR-TWILIO-AUTH-TOKEN-HERE
     TWILIO_PHONE_NUMBER: YOUR-TWILIO-PHONE-NUMBER-HERE
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - s3:*
+          Resource: "*"
+        - Effect: "Allow"
+          Action:
+            - "rekognition:*"
+          Resource: "*"
+
+custom:
+  fileUploadBucketName: ${self:service}-bucket-${self:provider.stage}
 
 package:
   artifact: target/ServerlessSmsSender-1.0-SNAPSHOT.jar
 
 functions:
   postImage:
-    handler: org.example.PostImage
+    handler: org.example.functions.PostImage
     events:
       - httpApi:
           method: POST
           path: /
+    environment:
+      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
+      CLIENT_REGION: ${self:provider.region}
 
   getImages:
-    handler: org.example.GetImages
+    handler: org.example.functions.GetImages
     events:
       - httpApi:
           method: GET
-          path: /
+          path: /images
+
+resources:
+  Resources:
+    FileBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.fileUploadBucketName}
+        AccessControl: PublicRead
