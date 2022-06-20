@@ -1,0 +1,28 @@
+service: serverless-sms-sender
+
+provider:
+  name: aws
+  runtime: java11
+  region: sa-east-1
+  environment:
+    TWILIO_ACCOUNT_SID: YOUR-TWILIO-ACCOUNT-SID-HERE
+    TWILIO_AUTH_TOKEN: YOUR-TWILIO-AUTH-TOKEN-HERE
+    TWILIO_PHONE_NUMBER: YOUR-TWILIO-PHONE-NUMBER-HERE
+
+package:
+  artifact: target/ServerlessSmsSender-1.0-SNAPSHOT.jar
+
+functions:
+  postImage:
+    handler: org.example.PostImage
+    events:
+      - httpApi:
+          method: POST
+          path: /
+
+  getImages:
+    handler: org.example.GetImages
+    events:
+      - httpApi:
+          method: GET
+          path: /
