@@ -33,19 +33,35 @@ custom:
 package:
   artifact: target/ServerlessSmsSender-1.0-SNAPSHOT.jar
 
+plugins:
+  - serverless-iam-roles-per-function
+
 functions:
   postImage:
     handler: org.example.functions.PostImage
     events:
       - httpApi:
           method: POST
-          path: /
+          path: /{imageName}
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - dynamodb:PutItem
+        Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}"
     environment:
       FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
       CLIENT_REGION: ${self:provider.region}
+      TABLE_NAME: ${self:custom.tableName}
 
   getImages:
     handler: org.example.functions.GetImages
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - dynamodb:Query
+          - dynamodb:Scan
+          - dynamodb:GetItem
+        Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}"
     events:
       - httpApi:
           method: GET
@@ -53,6 +69,8 @@ functions:
     environment:
       FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
       CLIENT_REGION: ${self:provider.region}
+      TABLE_NAME: ${self:custom.tableName}
+
 resources:
   Resources:
     FileBucket:
@@ -65,7 +83,7 @@ resources:
       Properties:
         TableName: ${self:custom.tableName}
         AttributeDefinitions:
-          - AttributeName: ID
+          - AttributeName: Id
             AttributeType: S
         KeySchema:
           - AttributeName: ID
