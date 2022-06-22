@@ -29,6 +29,7 @@ public class GetImages implements RequestHandler<Object, Object> {
         var clientResult = s3Client.listObjectsV2(ListObjectsV2Request.builder().bucket(S3_BUCKET_NAME).build());
         List<String> keys  = clientResult.contents().stream().map(S3Object::key).collect(Collectors.toList());
 
+        //Generate an URL to show/download the image
         for(String key : keys){
             S3Presigner presigner = S3Presigner.create();
             GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(S3_BUCKET_NAME).key(key).build();
