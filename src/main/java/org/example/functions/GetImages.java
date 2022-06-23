@@ -34,7 +34,7 @@ public class GetImages implements RequestHandler<Object, Object> {
         //Generate an URL to show/download the image
         for(Map<String, AttributeValue> item : scanResponse.items()){
             S3Presigner presigner = S3Presigner.create();
-            GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(S3_BUCKET_NAME).key(item.get("Id").s()).build();
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder().bucket(S3_BUCKET_NAME).key(item.get("imageId").s()).build();
             GetObjectPresignRequest getObjectPresignRequest = GetObjectPresignRequest.builder().signatureDuration(Duration.ofMinutes(10)).getObjectRequest(getObjectRequest).build();
             PresignedGetObjectRequest presignedGetObjectRequest = presigner.presignGetObject(getObjectPresignRequest);
 
@@ -42,7 +42,9 @@ public class GetImages implements RequestHandler<Object, Object> {
                     presignedGetObjectRequest.url().toString(),
                     item.get("imageId").s(),
                     item.get("name").s(),
-                    item.get("createdAt").s()
+                    item.get("createdAt").s(),
+                    item.get("processingStatus").s(),
+                    item.getOrDefault("labels", AttributeValue.builder().ss().build()).ss()
                     );
 
             results.add(result);

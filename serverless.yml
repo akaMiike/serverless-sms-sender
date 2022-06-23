@@ -5,14 +5,17 @@ provider:
   runtime: java11
   region: us-east-1
   stage: dev
-  apiGateway:
-    binaryMediaTypes:
-      - 'multipart/form-data'
+  httpApi:
+    cors: true
 
   environment:
-    TWILIO_ACCOUNT_SID: YOUR-TWILIO-ACCOUNT-SID-HERE
-    TWILIO_AUTH_TOKEN: YOUR-TWILIO-AUTH-TOKEN-HERE
-    TWILIO_PHONE_NUMBER: YOUR-TWILIO-PHONE-NUMBER-HERE
+    TWILIO_ACCOUNT_SID: SID
+    TWILIO_AUTH_TOKEN: AUTH
+    TWILIO_PHONE_NUMBER: PHONE
+    DESTINATION_PHONE_NUMBER: DEST
+    FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
+    CLIENT_REGION: ${self:provider.region}
+    TABLE_NAME: ${self:custom.tableName}
   iam:
     role:
       statements:
@@ -43,25 +46,27 @@ package:
 functions:
   postImage:
     handler: org.example.functions.PostImage
+    timeout: 60
     events:
       - httpApi:
           method: POST
           path: /{imageName}
-    environment:
-      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
-      CLIENT_REGION: ${self:provider.region}
-      TABLE_NAME: ${self:custom.tableName}
 
   getImages:
     handler: org.example.functions.GetImages
+    timeout: 60
     events:
       - httpApi:
           method: GET
           path: /images
-    environment:
-      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
-      CLIENT_REGION: ${self:provider.region}
-      TABLE_NAME: ${self:custom.tableName}
+
+  notifyPersonInPicture:
+    handler: org.example.functions.NotifyPersonInPicture
+    timeout: 60
+    events:
+      - httpApi:
+          method: GET
+          path: /notify-person
 
   markImageUploaded:
     handler: org.example.functions.MarkImageUpload
@@ -73,21 +78,18 @@ functions:
           batchSize: 5
           maximumBatchingWindow: 2
     environment:
-      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
-      CLIENT_REGION: ${self:provider.region}
-      TABLE_NAME: ${self:custom.tableName}
       FUNCTION_ARN:
         "Fn::GetAtt": [ VerifyImageLabelsLambdaFunction, Arn ]
   verifyImageLabels:
     handler: org.example.functions.VerifyImageLabels
+    timeout: 60
     events:
       - httpApi:
           method: POST
           path: /verify-labels
     environment:
-      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
-      CLIENT_REGION: ${self:provider.region}
-      TABLE_NAME: ${self:custom.tableName}
+      NOTIFY_PERSON_IN_PICTURE_ARN:
+        "Fn::GetAtt": [ NotifyPersonInPictureLambdaFunction, Arn ]
 resources:
   Resources:
     ImagesTable:
@@ -138,6 +140,16 @@ resources:
           BlockPublicPolicy: true
           IgnorePublicAcls: true
           RestrictPublicBuckets: true
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - '*'
+              AllowedMethods:
+                - PUT
+                - POST
+                - GET
+              AllowedOrigins:
+                - '*'
         NotificationConfiguration:
           QueueConfigurations:
             - Event: s3:ObjectCreated:Put
