@@ -3,7 +3,7 @@ service: serverless-sms-sender
 provider:
   name: aws
   runtime: java11
-  region: sa-east-1
+  region: us-east-1
   stage: dev
   apiGateway:
     binaryMediaTypes:
@@ -20,21 +20,25 @@ provider:
           Action:
             - s3:*
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - lambda:*
+          Resource: "*"
         - Effect: "Allow"
           Action:
             - "rekognition:*"
           Resource: "*"
+        - Effect: "Allow"
+          Action:
+            - dynamodb:*
+          Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}"
 
 custom:
-  tableName: your-table
-  fileUploadBucketName: ${self:service}-bucket-${self:provider.stage}
-  yourName: your-name
+  tableName: images
+  fileUploadBucketName: ${self:service}-buckettestetete-${self:provider.stage}
 
 package:
   artifact: target/ServerlessSmsSender-1.0-SNAPSHOT.jar
-
-plugins:
-  - serverless-iam-roles-per-function
 
 functions:
   postImage:
@@ -43,11 +47,6 @@ functions:
       - httpApi:
           method: POST
           path: /{imageName}
-    iamRoleStatements:
-      - Effect: "Allow"
-        Action:
-          - dynamodb:PutItem
-        Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}"
     environment:
       FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
       CLIENT_REGION: ${self:provider.region}
@@ -55,13 +54,6 @@ functions:
 
   getImages:
     handler: org.example.functions.GetImages
-    iamRoleStatements:
-      - Effect: "Allow"
-        Action:
-          - dynamodb:Query
-          - dynamodb:Scan
-          - dynamodb:GetItem
-        Resource: "arn:aws:dynamodb:${self:provider.region}:*:table/${self:custom.tableName}"
     events:
       - httpApi:
           method: GET
@@ -71,21 +63,86 @@ functions:
       CLIENT_REGION: ${self:provider.region}
       TABLE_NAME: ${self:custom.tableName}
 
+  markImageUploaded:
+    handler: org.example.functions.MarkImageUpload
+    timeout: 60
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt: [ Queue, 'Arn' ]
+          batchSize: 5
+          maximumBatchingWindow: 2
+    environment:
+      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
+      CLIENT_REGION: ${self:provider.region}
+      TABLE_NAME: ${self:custom.tableName}
+      FUNCTION_ARN:
+        "Fn::GetAtt": [ VerifyImageLabelsLambdaFunction, Arn ]
+  verifyImageLabels:
+    handler: org.example.functions.VerifyImageLabels
+    events:
+      - httpApi:
+          method: POST
+          path: /verify-labels
+    environment:
+      FILE_UPLOAD_BUCKET_NAME: ${self:custom.fileUploadBucketName}
+      CLIENT_REGION: ${self:provider.region}
+      TABLE_NAME: ${self:custom.tableName}
 resources:
   Resources:
-    FileBucket:
-      Type: AWS::S3::Bucket
-      Properties:
-        BucketName: ${self:custom.fileUploadBucketName}-${self:custom.yourName}
-        AccessControl: PublicRead
-    DynamoDbTable:
+    ImagesTable:
       Type: AWS::DynamoDB::Table
       Properties:
         TableName: ${self:custom.tableName}
-        AttributeDefinitions:
-          - AttributeName: Id
-            AttributeType: S
         KeySchema:
-          - AttributeName: ID
+          - AttributeName: imageId
             KeyType: HASH
-        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: imageId
+            AttributeType: S
+        ProvisionedThroughput:
+          ReadCapacityUnits: 5
+          WriteCapacityUnits: 5
+    Queue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: queue
+        VisibilityTimeout: 65
+    QueuePolicy:
+      DependsOn: Queue
+      Type: AWS::SQS::QueuePolicy
+      Properties:
+        Queues:
+          - !Ref Queue
+        PolicyDocument:
+          Statement:
+            - Sid: sid
+              Effect: Allow
+              Principal:
+                Service: s3.amazonaws.com
+              Action: SQS:SendMessage
+              Resource:
+                Fn::GetAtt: [ Queue, 'Arn' ]
+              Condition:
+                StringEquals:
+                  aws:SourceAccount: ${aws:accountId}
+                ArnLike:
+                  aws:SourceArn: arn:aws:s3:*:*:${self:custom.fileUploadBucketName}
+    FileBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.fileUploadBucketName}
+        AccessControl: Private
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        NotificationConfiguration:
+          QueueConfigurations:
+            - Event: s3:ObjectCreated:Put
+              Queue:
+                Fn::GetAtt: [ Queue, 'Arn' ]
+      DependsOn:
+        - Queue
+        - QueuePolicy

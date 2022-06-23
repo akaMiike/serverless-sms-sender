@@ -4,6 +4,7 @@ import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyRequestEvent;
 import com.amazonaws.services.lambda.runtime.events.APIGatewayProxyResponseEvent;
+import org.example.model.ProcessedStatus;
 import org.example.model.UploadImageData;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
@@ -14,6 +15,13 @@ import software.amazon.awssdk.services.dynamodb.model.ResourceNotFoundException;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
@@ -45,9 +53,10 @@ public class PostImage implements RequestHandler<Map<String, Object>, Object> {
         //Connect with DynamoDB and prepares the values to be inserted
         DynamoDbClient dbClient = DynamoDbClient.builder().region(Region.of(CLIENT_REGION)).build();
         HashMap<String,AttributeValue> imageValues = new HashMap<>();
-        imageValues.put("Id", AttributeValue.builder().s(newKey).build());
+        imageValues.put("imageId", AttributeValue.builder().s(newKey).build());
         imageValues.put("name", AttributeValue.builder().s(imageName).build());
         imageValues.put("createdAt", AttributeValue.builder().s(ZonedDateTime.now().toString()).build());
+        imageValues.put("processingStatus", AttributeValue.builder().s(ProcessedStatus.NOT_UPLOADED.name()).build());
 
         PutItemRequest request = PutItemRequest.builder()
                 .tableName(TABLE_NAME)
@@ -55,9 +64,11 @@ public class PostImage implements RequestHandler<Map<String, Object>, Object> {
                 .build();
 
         try {
-            dbClient.putItem(request);
+            System.out.println(dbClient.putItem(request));
         }
         catch (DynamoDbException e) {
+            e.printStackTrace();
+            System.out.println("error...");
             System.err.println(e.getMessage());
             System.exit(1);
         }

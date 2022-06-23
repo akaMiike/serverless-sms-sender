@@ -40,7 +40,7 @@ public class GetImages implements RequestHandler<Object, Object> {
 
             ImageData result = new ImageData(
                     presignedGetObjectRequest.url().toString(),
-                    item.get("Id").s(),
+                    item.get("imageId").s(),
                     item.get("name").s(),
                     item.get("createdAt").s()
                     );
